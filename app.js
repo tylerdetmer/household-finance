@@ -256,3 +256,137 @@ $("clear").onclick=()=>{
 };
 if("serviceWorker" in navigator) addEventListener("load",()=>navigator.serviceWorker.register("./sw.js").catch(()=>{}));
 render();
+
+// MONTHLY HISTORY FEATURE
+(function addMonthlyHistory(){
+  const nav=document.querySelector("nav");
+  const main=document.querySelector("main");
+  if(!nav || !main || document.getElementById("history")) return;
+
+  const button=document.createElement("button");
+  button.type="button";
+  button.dataset.tab="history";
+  button.textContent="History";
+  nav.appendChild(button);
+
+  const section=document.createElement("section");
+  section.id="history";
+  section.className="hidden";
+  section.innerHTML=`
+    <div class="card" style="margin-bottom:14px">
+      <h2>Monthly History</h2>
+      <label for="historyMonth">Choose a month</label>
+      <input id="historyMonth" type="month" style="width:100%;padding:12px;margin-top:8px">
+    </div>
+    <div id="historyMetrics" class="metrics"></div>
+    <div class="card" style="margin:14px 0">
+      <h3>Compared with previous month</h3>
+      <div id="historyComparison"></div>
+    </div>
+    <div class="card" style="margin:14px 0">
+      <h3>Expense breakdown</h3>
+      <div id="historyCategories"></div>
+    </div>
+    <div class="card" style="margin:14px 0">
+      <h3>Monthly totals</h3>
+      <div id="historyTotals"></div>
+    </div>
+  `;
+  main.appendChild(section);
+
+  button.onclick=()=>tab("history");
+
+  const monthInput=document.getElementById("historyMonth");
+  monthInput.value=new Date().toISOString().slice(0,7);
+  monthInput.onchange=renderHistory;
+
+  function monthData(key){
+    return data.tx.filter(t=>t.date && t.date.slice(0,7)===key);
+  }
+
+  function totalOf(items,type){
+    return sum(items.filter(t=>t.type===type));
+  }
+
+  function previousMonth(key){
+    const d=new Date(key+"-01T12:00:00");
+    d.setMonth(d.getMonth()-1);
+    return d.getFullYear()+"-"+String(d.getMonth()+1).padStart(2,"0");
+  }
+
+  function labelMonth(key){
+    return new Date(key+"-01T12:00:00").toLocaleDateString("en-US",{
+      month:"long",year:"numeric"
+    });
+  }
+
+  function renderHistory(){
+    const key=monthInput.value;
+    if(!key) return;
+
+    const current=monthData(key);
+    const previous=monthData(previousMonth(key));
+
+    const income=totalOf(current,"Income");
+    const spent=totalOf(current,"Expense");
+    const refunds=totalOf(current,"Refund");
+    const savings=totalOf(current,"Savings")+totalOf(current,"Goal");
+    const net=income+refunds-spent-savings;
+
+    const oldSpent=totalOf(previous,"Expense");
+    const oldIncome=totalOf(previous,"Income");
+    const oldSavings=totalOf(previous,"Savings")+totalOf(previous,"Goal");
+
+    document.getElementById("historyMetrics").innerHTML=[
+      ["Income",fmt(income)],
+      ["Expenses",fmt(spent)],
+      ["Refunds",fmt(refunds)],
+      ["Savings added",fmt(savings)],
+      ["Net cash flow",fmt(net)]
+    ].map(([name,value])=>`
+      <div class="card">
+        <div class="label">${name}</div>
+        <div class="value">${value}</div>
+      </div>
+    `).join("");
+
+    function difference(now,old){
+      const diff=now-old;
+      return (diff>0?"+":diff<0?"−":"")+fmt(Math.abs(diff));
+    }
+
+    document.getElementById("historyComparison").innerHTML=`
+      <p><b>${labelMonth(key)}</b> vs. ${labelMonth(previousMonth(key))}</p>
+      <div class="item"><span>Expenses</span><b>${difference(spent,oldSpent)}</b></div>
+      <div class="item"><span>Income</span><b>${difference(income,oldIncome)}</b></div>
+      <div class="item"><span>Savings</span><b>${difference(savings,oldSavings)}</b></div>
+      <small>Positive expense differences mean spending increased.</small>
+    `;
+
+    const categories={};
+    current.filter(t=>t.type==="Expense").forEach(t=>{
+      const name=t.category||"Other";
+      categories[name]=(categories[name]||0)+Number(t.amount||0);
+    });
+
+    const sorted=Object.entries(categories).sort((a,b)=>b[1]-a[1]);
+
+    document.getElementById("historyCategories").innerHTML=
+      sorted.length?sorted.map(([name,amount])=>`
+        <div class="item">
+          <span>${esc(name)}</span>
+          <b>${fmt(amount)}</b>
+        </div>
+      `).join(""):'<div class="empty">No expenses recorded this month.</div>';
+
+    document.getElementById("historyTotals").innerHTML=`
+      <div class="item"><span>Number of transactions</span><b>${current.length}</b></div>
+      <div class="item"><span>Income</span><b>${fmt(income)}</b></div>
+      <div class="item"><span>Expenses</span><b>${fmt(spent)}</b></div>
+      <div class="item"><span>Refunds</span><b>${fmt(refunds)}</b></div>
+      <div class="item"><span>Savings and goals</span><b>${fmt(savings)}</b></div>
+    `;
+  }
+
+  renderHistory();
+})();
