@@ -109,8 +109,7 @@ function render(){
   $("recent").innerHTML=recent.length?recent.map(item).join(""):'<div class="empty">No activity this month.</div>';
   $("goalPreview").innerHTML=data.goals.slice(0,3).map(goalHTML).join("");
   const q=$("search").value.toLowerCase();
-  const filtered=[...a].filter(t=>(t.merchant+" "+t.note+" "+t.category).toLowerCase().includes(q)).sort((x,y)=>y.date.localeCompare(x.date));
-  $("count").textContent=filtered.length+" entries";
+  const filtered=[...a].filter(t=>(t.merchant+" "+t.note+" "+t.category).toLowerCase().includes(q)).sort((x,y)=>(Number(y.addedAt)||Date.parse(y.date+"T12:00:00"))-(Number(x.addedAt)||Date.parse(x.date+"T12:00:00")));$("count").textContent=filtered.length+" entries";
   $("transactions").innerHTML=filtered.length?filtered.map(item).join(""):'<div class="empty">No matching transactions.</div>';
   $("budgetEditor").innerHTML=data.budget.map((b,i)=>`
     <div class="item" style="align-items:center;gap:8px;flex-wrap:wrap">
@@ -158,7 +157,9 @@ $("closeTx").onclick=()=>$("txDialog").close();
 $("txForm").onsubmit=e=>{
   e.preventDefault();
   const id=$("txId").value;
+  const existing=data.tx.find(x=>x.id===id);
   const t={
+    addedAt:existing?.addedAt ?? (id ? undefined : Date.now()),
     id:id||crypto.randomUUID(),date:$("date").value,amount:Number($("amount").value),
     type:$("type").value,category:$("category").value,merchant:$("merchant").value.trim(),
     note:$("note").value,goalId:$("goal").value
