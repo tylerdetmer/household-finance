@@ -1,5 +1,6 @@
 
 const KEY="hf-tracker-v1";
+const SORT_KEY="hf-activity-sort";
 const START=[
   ["Mortgage",1276],["Auto + home insurance",410],["Property tax sinking fund",585],
   ["Car payment",453],["Student loan",308],["Childcare",802],["Utilities + sewer",325],
@@ -109,7 +110,28 @@ function render(){
   $("recent").innerHTML=recent.length?recent.map(item).join(""):'<div class="empty">No activity this month.</div>';
   $("goalPreview").innerHTML=data.goals.slice(0,3).map(goalHTML).join("");
   const q=$("search").value.toLowerCase();
-  const filtered=[...a].filter(t=>(t.merchant+" "+t.note+" "+t.category).toLowerCase().includes(q)).sort((x,y)=>(Number(y.addedAt)||Date.parse(y.date+"T12:00:00"))-(Number(x.addedAt)||Date.parse(x.date+"T12:00:00")));$("count").textContent=filtered.length+" entries";
+const sort=$("sort").value||"purchase-new";
+const filtered=[...a].filter(t=>(t.merchant+" "+t.note+" "+t.category).toLowerCase().includes(q));
+
+filtered.sort((x,y)=>{
+  const purchaseX=Date.parse((x.date||"")+"T12:00:00")||0;
+  const purchaseY=Date.parse((y.date||"")+"T12:00:00")||0;
+  const addedX=Number(x.addedAt)||purchaseX;
+  const addedY=Number(y.addedAt)||purchaseY;
+
+  switch(sort){
+    case "purchase-old": return purchaseX-purchaseY;
+    case "added-new": return addedY-addedX;
+    case "added-old": return addedX-addedY;
+    case "amount-high": return Number(y.amount||0)-Number(x.amount||0);
+    case "amount-low": return Number(x.amount||0)-Number(y.amount||0);
+    case "merchant-az": return (x.merchant||"").localeCompare(y.merchant||"",undefined,{sensitivity:"base"});
+    case "merchant-za": return (y.merchant||"").localeCompare(x.merchant||"",undefined,{sensitivity:"base"});
+    default: return purchaseY-purchaseX;
+  }
+});
+
+$("count").textContent=filtered.length+" entries";
   $("transactions").innerHTML=filtered.length?filtered.map(item).join(""):'<div class="empty">No matching transactions.</div>';
   $("budgetEditor").innerHTML=data.budget.map((b,i)=>`
     <div class="item" style="align-items:center;gap:8px;flex-wrap:wrap">
@@ -136,6 +158,13 @@ document.querySelectorAll("nav button,[data-tab]").forEach(b=>b.onclick=()=>tab(
 $("month").value=new Date().toISOString().slice(0,7);
 $("month").onchange=render;
 $("search").oninput=render;
+const savedSort=localStorage.getItem(SORT_KEY);
+$("sort").value=[...$("sort").options].some(o=>o.value===savedSort)?savedSort:"purchase-new";
+
+$("sort").onchange=()=>{
+  localStorage.setItem(SORT_KEY,$("sort").value);
+  render();
+};
 function openTx(id){
   const t=data.tx.find(x=>x.id===id);
   $("txForm").reset();
